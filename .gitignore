@@ -1,1 +1,4 @@
+.vscode/
+
 basics/*_notes.md
+**/**/node_modules/
