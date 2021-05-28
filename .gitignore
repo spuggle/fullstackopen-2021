@@ -2,3 +2,5 @@
 
 basics/*_notes.md
 **/**/node_modules/
+**/**/.env
+.env
