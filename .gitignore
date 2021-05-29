@@ -1,6 +1,10 @@
 .vscode/
+lecture/
 
-basics/*_notes.md
 **/**/node_modules/
 **/**/.env
+**/**/db.json
+
+basics/*_notes.md
+
 .env
