@@ -1,0 +1,27 @@
+POST https://blooming-harbor-62304.herokuapp.com/api/persons/
+Content-Type: application/json
+
+{
+  "name": "Jake",
+  "number": "012-345-6789"
+}
+
+###
+
+POST https://blooming-harbor-62304.herokuapp.com/api/persons/
+Content-Type: application/json
+
+{
+  "name": "",
+  "number": "012-345-6789"
+}
+
+###
+
+POST https://blooming-harbor-62304.herokuapp.com/api/persons/
+Content-Type: application/json
+
+{
+  "name": "Jane",
+  "number": ""
+}

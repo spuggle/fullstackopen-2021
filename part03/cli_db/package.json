@@ -1,0 +1,14 @@
+{
+  "name": "cli_db",
+  "version": "1.0.0",
+  "description": "",
+  "main": "mongo.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "spuggle",
+  "license": "MIT",
+  "dependencies": {
+    "mongoose": "^5.12.12"
+  }
+}
