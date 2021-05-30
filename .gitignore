@@ -1,5 +1,5 @@
 .vscode/
-lecture/
+lecture*/
 
 **/**/node_modules/
 **/**/.env
