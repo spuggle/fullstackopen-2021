@@ -8,7 +8,7 @@ const Person = require("./models/person");
 
 const PORT = process.env.PORT || 3001;
 
-const errorHandler = (error, request, response) => {
+const errorHandler = (error, request, response, next) => {
   console.error(error.message);
 
   if (error.name === "CastError") {
@@ -18,6 +18,8 @@ const errorHandler = (error, request, response) => {
   }
 
   response.status(400).json({ error: error.message });
+
+  next(error);
 };
 
 morgan.token("body", request => JSON.stringify(request.body));
