@@ -1,0 +1,12 @@
+GET https://immense-brushlands-16614.herokuapp.com/api/persons/
+
+###
+
+GET https://immense-brushlands-16614.herokuapp.com/api/persons/60b3444f706dcb2d172d841e
+
+###
+GET https://immense-brushlands-16614.herokuapp.com/api/persons/60b365441835524706e0ca94
+
+###
+
+GET https://immense-brushlands-16614.herokuapp.com/api/persons/60b365441835524706e04

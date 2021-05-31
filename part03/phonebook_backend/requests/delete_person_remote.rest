@@ -1,1 +1,1 @@
-DELETE https://blooming-harbor-62304.herokuapp.com/api/persons/3
+DELETE https://immense-brushlands-16614.herokuapp.com/api/persons/3
