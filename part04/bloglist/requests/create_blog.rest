@@ -1,5 +1,19 @@
 POST http://localhost:3003/api/blogs/
 Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InJvb3QiLCJpZCI6IjYwYjhmZWY1N2IwYTM2OGQ5OGMzZjg0MCIsImlhdCI6MTYyMjczNzM5NywiZXhwIjoxNjIyNzQwOTk3fQ.uemEbdnMWidOKciDpZZEWooK6ctiBKsap3bb2CRd-VY
+
+{
+  "title": "Coding is fun",
+  "author": "spuggle",
+  "url": "someurl",
+  "likes": 5
+}
+
+###
+
+POST http://localhost:3003/api/blogs/
+Content-Type: application/json
+Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6InJvb3QiLCJpZCI6IjYwYjhmZWY1N2IwYTM2OGQ5OGMzZjg0MCIsImlhdCI6MTYyMjczNzM5NywiZXhwIjoxNjIyNzQwOTk3fQ.uemEbdnMWidOKciDpZZEWooK6ctiBKsap3bb2CRd-VE
 
 {
   "title": "Coding is fun",

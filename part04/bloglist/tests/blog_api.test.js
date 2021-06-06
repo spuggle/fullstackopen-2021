@@ -1,56 +1,88 @@
+const config = require("../utils/config");
+
 const supertest = require("supertest");
 const mongoose = require("mongoose");
+const jwt = require("jsonwebtoken");
 
 const app = require("../app");
+
 const Blog = require("../models/blog");
+const User = require("../models/user");
+
+jest.setTimeout(60000);
+
 const helper = require("./test_helper");
 
 const api = supertest(app);
 
+const createToken = (userData, expiresIn = 60 * 60) => {
+  const tokenData = {
+    username: userData.username,
+    id: userData._id
+  };
+  return jwt.sign(tokenData, config.SECRET, { expiresIn });
+};
+
+const getRandomValidToken = () => {
+  const [initialUser] = helper.initialUsers;
+  return createToken(initialUser);
+};
+
+const getRandomExpiredToken = async (givenUser = helper.initialUsers[0]) => {
+  const token = createToken(givenUser, 1);
+  return new Promise(res => setTimeout(() => res(token), 1000));
+};
+
 jest.setTimeout(15000);
 
 beforeEach(async () => {
+  await User.deleteMany({});
   await Blog.deleteMany({});
-  await Blog.insertMany(helper.initialBlogs);
+
+  await helper.prepareDatabases();
 });
 
-describe("When blogs are fetched", () => {
-  test("There are right amount of blogs", async () => {
+describe("Fetching blogs", () => {
+  test("There are a right amount of blogs", async () => {
     const initialBlogs = await helper.getAllBlogs();
-
     expect(initialBlogs).toHaveLength(helper.initialBlogs.length);
   });
 
-  test("Any one contains the id property", async () => {
-    const [initialBlog] = await helper.getAllBlogs();
+  test("All blogs contain the `id` property", async () => {
+    const allBlogs = await helper.getAllBlogs();
 
-    expect(initialBlog.id).toBeDefined();
+    for (const blog of allBlogs) {
+      expect(blog.id).toBeDefined();
+    }
   });
 });
 
-describe("When blogs are created", () => {
-  test("Correct data creates a valid blog", async () => {
+describe("Creating blogs", () => {
+  test("Valid data, valid token: Creates valid blog with status 201", async () => {
+    const token = await getRandomValidToken();
     const newBlogData = {
       title: "This is a new blog",
       author: "spuggle",
       url: "some/url",
-      likes: 10
+      likes: 42000
     };
 
     await api
       .post("/api/blogs")
+      .set("Authorization", `Bearer ${token}`)
       .send(newBlogData)
       .expect(201)
       .expect("Content-Type", /application\/json/);
 
     const receivedBlogs = await helper.getAllBlogs();
-    const blogTitles = receivedBlogs.map(blog => blog.title);
-
     expect(receivedBlogs).toHaveLength(helper.initialBlogs.length + 1);
+
+    const blogTitles = receivedBlogs.map(blog => blog.title);
     expect(blogTitles).toContain(newBlogData.title);
   });
 
-  test("When no likes provided, defaults to 0", async () => {
+  test("No likes, valid token: Creates with `likes` defaulted to `0`", async () => {
+    const token = await getRandomValidToken();
     const newBlogData = {
       title: "This is a different blog",
       author: "spuggle",
@@ -59,34 +91,118 @@ describe("When blogs are created", () => {
 
     const response = await api
       .post("/api/blogs")
+      .set("Authorization", `Bearer ${token}`)
       .send(newBlogData)
       .expect(201)
       .expect("Content-Type", /application\/json/);
 
     const createdBlog = response.body;
-
     expect(createdBlog.likes).toBe(0);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length + 1);
   });
 
-  test("Missing data errors with code 400", async () => {
-    const newBlogData = {};
+  test("Valid data, malformatted token: Status 404", async () => {
+    const token = await getRandomValidToken();
+    const newBlogData = {
+      title: "This is a new blog",
+      author: "spuggle",
+      url: "some/url",
+      likes: 42000
+    };
+
+    await api
+      .post("/api/blogs")
+      .set("Authorization", `${token}`)
+      .send(newBlogData)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+  });
+
+  test("Valid data, invalid token: Status 401", async () => {
+    const newBlogData = {
+      title: "This is a new blog",
+      author: "spuggle",
+      url: "some/url",
+      likes: 42000
+    };
+
+    await api
+      .post("/api/blogs")
+      .set("Authorization", "Bearer saotuhsacurcdusrs")
+      .send(newBlogData)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+  });
+
+  test("Valid data, missing token: Status 401", async () => {
+    const newBlogData = {
+      title: "This is a new blog",
+      author: "spuggle",
+      url: "some/url",
+      likes: 42000
+    };
 
     await api
       .post("/api/blogs")
       .send(newBlogData)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+  });
+
+  test("Valid data, expired token: Status 401", async () => {
+    const expiredToken = await getRandomExpiredToken();
+    const newBlogData = {
+      title: "This is a new blog",
+      author: "spuggle",
+      url: "some/url",
+      likes: 42000
+    };
+
+    await api
+      .post("/api/blogs")
+      .set("Authorization", `Bearer ${expiredToken}`)
+      .send(newBlogData)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+  });
+
+  test("Missing data, valid token: Status 400", async () => {
+    const token = await getRandomValidToken();
+    const newBlogData = {};
+
+    await api
+      .post("/api/blogs")
+      .set("Authorization", `Bearer ${token}`)
+      .send(newBlogData)
       .expect(400);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
   });
 });
 
-describe("When blogs are updated", () => {
-  test("Valid likes updates the blog", async () => {
-    const [initialBlog] = await helper.getAllBlogs();
+describe("Updating blogs", () => {
+  test("Valid likes, valid token of author: Updates likes with status 200", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const [selectedBlogID] = executorAuthor.blogs;
+    const authorToken = createToken(executorAuthor);
     const updatedData = {
-      likes: 10
+      likes: 42000
     };
 
     const response = await api
-      .put(`/api/blogs/${initialBlog.id}`)
+      .put(`/api/blogs/${selectedBlogID.toString()}`)
+      .set("Authorization", `Bearer ${authorToken}`)
       .send(updatedData)
       .expect(200)
       .expect("Content-Type", /application\/json/);
@@ -97,62 +213,253 @@ describe("When blogs are updated", () => {
     const finalBlogs = await helper.getAllBlogs();
     expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
 
-    const processedInitialBlog = JSON.parse(JSON.stringify(finalBlogs[0]));
+    const processedInitialBlog = JSON.parse(JSON.stringify(
+      finalBlogs.find(blog => blog.id.toString() === selectedBlogID.toString())
+    ));
     expect(processedInitialBlog).toEqual(finalBlog);
   });
 
-  test("Invalid data errors with code 400", async () => {
-    const [initialBlog] = await helper.getAllBlogs();
+  test("Valid likes, malformed token of author: Status 401", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const [selectedBlogID] = executorAuthor.blogs;
+    const authorToken = createToken(executorAuthor);
+    const updatedData = {
+      likes: 42000
+    };
 
     await api
-      .put(`/api/blogs/${initialBlog.id}`)
+      .put(`/api/blogs/${selectedBlogID.toString()}`)
+      .set("Authorization", `${authorToken}`)
+      .send(updatedData)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+
+    const finalBlog = JSON.parse(JSON.stringify(
+      finalBlogs.find(blog => blog.id.toString() === selectedBlogID.toString())
+    ));
+    expect(finalBlog.likes).not.toBe(updatedData.likes);
+  });
+
+  test("Valid likes, invalid token: Status 401", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const [selectedBlogID] = executorAuthor.blogs;
+    const updatedData = {
+      likes: 42000
+    };
+
+    await api
+      .put(`/api/blogs/${selectedBlogID.toString()}`)
+      .set("Authorization", "Bearer suasouhodusa")
+      .send(updatedData)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+
+    const finalBlog = JSON.parse(JSON.stringify(
+      finalBlogs.find(blog => blog.id.toString() === selectedBlogID.toString())
+    ));
+    expect(finalBlog.likes).not.toBe(updatedData.likes);
+  });
+
+  test("Valid likes, expired token of author: Status 401", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const [selectedBlogID] = executorAuthor.blogs;
+    const expiredAuthorToken = await getRandomExpiredToken(executorAuthor);
+    const updatedData = {
+      likes: 42000
+    };
+
+    await api
+      .put(`/api/blogs/${selectedBlogID.toString()}`)
+      .set("Authorization", `Bearer ${expiredAuthorToken}`)
+      .send(updatedData)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+
+    const finalBlog = JSON.parse(JSON.stringify(
+      finalBlogs.find(blog => blog.id.toString() === selectedBlogID.toString())
+    ));
+    expect(finalBlog.likes).not.toBe(updatedData.likes);
+  });
+
+  test("Valid likes, someone else's token: Status 401", async () => {
+    const [executingAuthor, differentAuthor] = await helper.getAllUsers();
+    const [initialBlogID] = executingAuthor.blogs;
+    const differentAuthorToken = await createToken(differentAuthor);
+    const updatedData = {
+      likes: 42000
+    };
+
+    await api
+      .put(`/api/blogs/${initialBlogID.toString()}`)
+      .set("Authorization", `Bearer ${differentAuthorToken}`)
+      .send(updatedData)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+
+    const finalBlog = JSON.parse(JSON.stringify(
+      finalBlogs.find(blog => blog.id.toString() === initialBlogID.toString())
+    ));
+    expect(finalBlog.likes).not.toBe(updatedData.likes);
+  });
+
+  test("Invalid data, valid token of author: Status 400", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const [selectedBlogID] = executorAuthor.blogs;
+    const authorToken = createToken(executorAuthor);
+
+    await api
+      .put(`/api/blogs/${selectedBlogID.toString()}`)
+      .set("Authorization", `Bearer ${authorToken}`)
       .send({})
       .expect(400);
   });
 
-  test("To a non-existent valid ID errors with code 400", async () => {
+  test("Invalid data, non-existent valid ID, valid token of author: Status 400", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const authorToken = createToken(executorAuthor);
     const validNonExistingID = await helper.generateValidNonExistingID();
 
     await api
       .put(`/api/blogs/${validNonExistingID}`)
+      .set("Authorization", `Bearer ${authorToken}`)
       .send({})
       .expect(400);
   });
 
-  test("To a malformed ID errors with code 400", async () => {
+  test("Malformed ID,valid token of author: Status 400", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const authorToken = createToken(executorAuthor);
+
     await api
       .put(`/api/blogs/${helper.malformedID}`)
+      .set("Authorization", `Bearer ${authorToken}`)
       .send({})
       .expect(400);
   });
 });
 
-describe("When blogs are deleted", () => {
-  test("Deletes with valid existing ID", async () => {
-    const [initialBlog] = await helper.getAllBlogs();
+describe("Deleting blogs", () => {
+  test("Valid existing ID, valid token of author: Deletes blog with status 204", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const [selectedBlogID] = executorAuthor.blogs;
+    const authorToken = createToken(executorAuthor);
 
     await api
-      .delete(`/api/blogs/${initialBlog.id}`)
+      .delete(`/api/blogs/${selectedBlogID.toString()}`)
+      .set("Authorization", `Bearer ${authorToken}`)
       .expect(204);
 
     const finalBlogs = await helper.getAllBlogs();
-
     expect(finalBlogs).toHaveLength(helper.initialBlogs.length - 1);
-    expect(finalBlogs).not.toContainEqual(initialBlog);
+
+    const finalBlog = finalBlogs.find(blog => blog.id.toString() === selectedBlogID.toString());
+    expect(finalBlog).not.toBeDefined();
   });
 
-  test("Errors with status code 400 with valid non-existing ID", async () => {
+  test("Valid existing ID, malformatted token of author: Status 401", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const [selectedBlogID] = executorAuthor.blogs;
+    const authorToken = createToken(executorAuthor);
+
+    await api
+      .delete(`/api/blogs/${selectedBlogID.toString()}`)
+      .set("Authorization", `${authorToken}`)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+
+    const finalBlog = finalBlogs.find(blog => blog.id.toString() === selectedBlogID.toString());
+    expect(finalBlog).toBeDefined();
+  });
+
+  test("Valid existing ID, expired token of author: Status 401", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const [selectedBlogID] = executorAuthor.blogs;
+    const expiredAuthorToken = getRandomExpiredToken(executorAuthor);
+
+    await api
+      .delete(`/api/blogs/${selectedBlogID.toString()}`)
+      .set("Authorization", `Bearer ${expiredAuthorToken}`)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+
+    const finalBlog = finalBlogs.find(blog => blog.id.toString() === selectedBlogID.toString());
+    expect(finalBlog).toBeDefined();
+  });
+
+  test("Valid existing ID, invalid token: Status 401", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const [selectedBlogID] = executorAuthor.blogs;
+
+    await api
+      .delete(`/api/blogs/${selectedBlogID.toString()}`)
+      .set("Authorization", "Bearer atoshusaduucruaso")
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+
+    const finalBlog = finalBlogs.find(blog => blog.id.toString() === selectedBlogID.toString());
+    expect(finalBlog).toBeDefined();
+  });
+
+  test("Valid existing ID, someone else's token: Status 401", async () => {
+    const [executorAuthor, differentAuthor] = await helper.getAllUsers();
+    const [selectedBlogID] = executorAuthor.blogs;
+    const differentAuthorToken = createToken(differentAuthor);
+
+    await api
+      .delete(`/api/blogs/${selectedBlogID.toString()}`)
+      .set("Authorization", `${differentAuthorToken}`)
+      .expect(401);
+
+    const finalBlogs = await helper.getAllBlogs();
+    expect(finalBlogs).toHaveLength(helper.initialBlogs.length);
+
+    const finalBlog = finalBlogs.find(blog => blog.id.toString() === selectedBlogID.toString());
+    expect(finalBlog).toBeDefined();
+  });
+
+  test("Valid non-existing ID, valid token of author: Status 400", async () => {
     const [initialBlog] = await helper.generateValidNonExistingID();
+    const [executorAuthor] = await helper.getAllUsers();
+    const authorToken = createToken(executorAuthor);
 
     await api
       .delete(`/api/blogs/${initialBlog.id}`)
+      .set("Authorization", `Bearer ${authorToken}`)
       .expect(400);
   });
 
-  test("Error with status code 400 with malformed ID", async () => {
+  test("Malformed ID, valid token of author: Status 400", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const authorToken = createToken(executorAuthor);
+
     await api
       .delete(`/api/blogs/${helper.malformedID}`)
+      .set("Authorization", `Bearer ${authorToken}`)
       .expect(400);
+  });
+
+  test("No ID, valid token of author: Status 404", async () => {
+    const [executorAuthor] = await helper.getAllUsers();
+    const authorToken = createToken(executorAuthor);
+
+    await api
+      .delete("/api/blogs")
+      .set("Authorization", `Bearer ${authorToken}`)
+      .expect(404);
   });
 });
 

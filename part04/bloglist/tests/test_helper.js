@@ -1,4 +1,7 @@
+const bcrypt = require("bcrypt");
+
 const Blog = require("../models/blog");
+const User = require("../models/user");
 
 const malformedID = "5a3d5da59070081a82a3445";
 
@@ -53,9 +56,65 @@ const initialBlogs = [
   }
 ];
 
-const getAllBlogs = async () => {
-  return Blog.find({});
+const initialUsers = [
+  {
+    name: "Robert C. Martin",
+    username: "robert",
+    password: "cleancoder"
+  },
+  {
+    name: "Edsger W. Dijkstra",
+    username: "edsger",
+    password: "codedesign"
+  },
+  {
+    name: "Michael Chan",
+    username: "michael",
+    password: "reactpatterns"
+  }
+];
+
+const prepareDatabases = async () => {
+  const registeredUsers = {};
+
+  const usersBeingRegistered = initialUsers.map(async userData => {
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(userData.password, saltRounds);
+    const user = new User({
+      ...userData,
+      passwordHash
+    });
+    const savedUser = await user.save();
+
+    registeredUsers[userData.name] = savedUser;
+    userData._id = registeredUsers[userData.name]._id;
+    userData.blogs = registeredUsers[userData.name].blogs;
+  });
+
+  await Promise.all(usersBeingRegistered);
+
+  const blogsBeingSaved = initialBlogs.map(async initialBlog => {
+    const registeredUser = registeredUsers[initialBlog.author];
+    initialBlog.user = registeredUser._id;
+
+    const blog = new Blog(initialBlog);
+    await blog.save();
+
+    registeredUser.blogs.push(blog);
+
+    if (!initialBlog.user) initialBlog.user = registeredUser._id;
+  });
+
+  await Promise.all(blogsBeingSaved);
+
+  const blogsBeingAssigned = Object.values(registeredUsers).map(async user => user.save());
+
+  await Promise.all(blogsBeingAssigned);
 };
+
+const getAllBlogs = async () => Blog.find({});
+
+const getAllUsers = async () => User.find({});
 
 const generateValidNonExistingID = async () => {
   const newBlog = new Blog({
@@ -70,4 +129,7 @@ const generateValidNonExistingID = async () => {
   return newBlog._id.toString();
 };
 
-module.exports = { initialBlogs, malformedID, getAllBlogs, generateValidNonExistingID };
+module.exports = {
+  initialBlogs, malformedID, initialUsers,
+  prepareDatabases, getAllBlogs, getAllUsers, generateValidNonExistingID
+};
