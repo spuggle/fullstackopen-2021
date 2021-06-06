@@ -15,8 +15,10 @@ jest.setTimeout(60000);
 const helper = require("./test_helper");
 
 beforeEach(async () => {
-  await User.deleteMany({});
-  await Blog.deleteMany({});
+  await Promise.all([
+    User.deleteMany({}),
+    Blog.deleteMany({})
+  ]);
 
   await helper.prepareDatabases();
 });

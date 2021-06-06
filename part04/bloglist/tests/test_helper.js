@@ -1,4 +1,7 @@
+const config = require("../utils/config");
+
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 const Blog = require("../models/blog");
 const User = require("../models/user");
@@ -129,7 +132,26 @@ const generateValidNonExistingID = async () => {
   return newBlog._id.toString();
 };
 
+const createToken = (userData, expiresIn = 60 * 60) => {
+  const tokenData = {
+    username: userData.username,
+    id: userData._id
+  };
+  return jwt.sign(tokenData, config.SECRET, { expiresIn });
+};
+
+const getRandomValidToken = () => {
+  const [initialUser] = initialUsers;
+  return createToken(initialUser);
+};
+
+const getRandomExpiredToken = async (givenUser = initialUsers[0]) => {
+  const token = createToken(givenUser, 1);
+  return new Promise(res => setTimeout(() => res(token), 1000));
+};
+
 module.exports = {
   initialBlogs, malformedID, initialUsers,
-  prepareDatabases, getAllBlogs, getAllUsers, generateValidNonExistingID
+  prepareDatabases, getAllBlogs, getAllUsers,
+  generateValidNonExistingID, createToken, getRandomValidToken, getRandomExpiredToken
 };

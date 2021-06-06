@@ -1,10 +1,8 @@
-const config = require("../utils/config");
-
 const supertest = require("supertest");
 const mongoose = require("mongoose");
-const jwt = require("jsonwebtoken");
 
 const app = require("../app");
+const api = supertest(app);
 
 const Blog = require("../models/blog");
 const User = require("../models/user");
@@ -13,31 +11,13 @@ jest.setTimeout(60000);
 
 const helper = require("./test_helper");
 
-const api = supertest(app);
-
-const createToken = (userData, expiresIn = 60 * 60) => {
-  const tokenData = {
-    username: userData.username,
-    id: userData._id
-  };
-  return jwt.sign(tokenData, config.SECRET, { expiresIn });
-};
-
-const getRandomValidToken = () => {
-  const [initialUser] = helper.initialUsers;
-  return createToken(initialUser);
-};
-
-const getRandomExpiredToken = async (givenUser = helper.initialUsers[0]) => {
-  const token = createToken(givenUser, 1);
-  return new Promise(res => setTimeout(() => res(token), 1000));
-};
-
 jest.setTimeout(15000);
 
 beforeEach(async () => {
-  await User.deleteMany({});
-  await Blog.deleteMany({});
+  await Promise.all([
+    User.deleteMany({}),
+    Blog.deleteMany({})
+  ]);
 
   await helper.prepareDatabases();
 });
@@ -59,7 +39,7 @@ describe("Fetching blogs", () => {
 
 describe("Creating blogs", () => {
   test("Valid data, valid token: Creates valid blog with status 201", async () => {
-    const token = await getRandomValidToken();
+    const token = await helper.getRandomValidToken();
     const newBlogData = {
       title: "This is a new blog",
       author: "spuggle",
@@ -82,7 +62,7 @@ describe("Creating blogs", () => {
   });
 
   test("No likes, valid token: Creates with `likes` defaulted to `0`", async () => {
-    const token = await getRandomValidToken();
+    const token = await helper.getRandomValidToken();
     const newBlogData = {
       title: "This is a different blog",
       author: "spuggle",
@@ -104,7 +84,7 @@ describe("Creating blogs", () => {
   });
 
   test("Valid data, malformatted token: Status 404", async () => {
-    const token = await getRandomValidToken();
+    const token = await helper.getRandomValidToken();
     const newBlogData = {
       title: "This is a new blog",
       author: "spuggle",
@@ -158,7 +138,7 @@ describe("Creating blogs", () => {
   });
 
   test("Valid data, expired token: Status 401", async () => {
-    const expiredToken = await getRandomExpiredToken();
+    const expiredToken = await helper.getRandomExpiredToken();
     const newBlogData = {
       title: "This is a new blog",
       author: "spuggle",
@@ -177,7 +157,7 @@ describe("Creating blogs", () => {
   });
 
   test("Missing data, valid token: Status 400", async () => {
-    const token = await getRandomValidToken();
+    const token = await helper.getRandomValidToken();
     const newBlogData = {};
 
     await api
@@ -195,7 +175,7 @@ describe("Updating blogs", () => {
   test("Valid likes, valid token of author: Updates likes with status 200", async () => {
     const [executorAuthor] = await helper.getAllUsers();
     const [selectedBlogID] = executorAuthor.blogs;
-    const authorToken = createToken(executorAuthor);
+    const authorToken = helper.createToken(executorAuthor);
     const updatedData = {
       likes: 42000
     };
@@ -222,7 +202,7 @@ describe("Updating blogs", () => {
   test("Valid likes, malformed token of author: Status 401", async () => {
     const [executorAuthor] = await helper.getAllUsers();
     const [selectedBlogID] = executorAuthor.blogs;
-    const authorToken = createToken(executorAuthor);
+    const authorToken = helper.createToken(executorAuthor);
     const updatedData = {
       likes: 42000
     };
@@ -267,7 +247,7 @@ describe("Updating blogs", () => {
   test("Valid likes, expired token of author: Status 401", async () => {
     const [executorAuthor] = await helper.getAllUsers();
     const [selectedBlogID] = executorAuthor.blogs;
-    const expiredAuthorToken = await getRandomExpiredToken(executorAuthor);
+    const expiredAuthorToken = await helper.getRandomExpiredToken(executorAuthor);
     const updatedData = {
       likes: 42000
     };
@@ -290,7 +270,7 @@ describe("Updating blogs", () => {
   test("Valid likes, someone else's token: Status 401", async () => {
     const [executingAuthor, differentAuthor] = await helper.getAllUsers();
     const [initialBlogID] = executingAuthor.blogs;
-    const differentAuthorToken = await createToken(differentAuthor);
+    const differentAuthorToken = await helper.createToken(differentAuthor);
     const updatedData = {
       likes: 42000
     };
@@ -313,7 +293,7 @@ describe("Updating blogs", () => {
   test("Invalid data, valid token of author: Status 400", async () => {
     const [executorAuthor] = await helper.getAllUsers();
     const [selectedBlogID] = executorAuthor.blogs;
-    const authorToken = createToken(executorAuthor);
+    const authorToken = helper.createToken(executorAuthor);
 
     await api
       .put(`/api/blogs/${selectedBlogID.toString()}`)
@@ -324,7 +304,7 @@ describe("Updating blogs", () => {
 
   test("Invalid data, non-existent valid ID, valid token of author: Status 400", async () => {
     const [executorAuthor] = await helper.getAllUsers();
-    const authorToken = createToken(executorAuthor);
+    const authorToken = helper.createToken(executorAuthor);
     const validNonExistingID = await helper.generateValidNonExistingID();
 
     await api
@@ -336,7 +316,7 @@ describe("Updating blogs", () => {
 
   test("Malformed ID,valid token of author: Status 400", async () => {
     const [executorAuthor] = await helper.getAllUsers();
-    const authorToken = createToken(executorAuthor);
+    const authorToken = helper.createToken(executorAuthor);
 
     await api
       .put(`/api/blogs/${helper.malformedID}`)
@@ -350,7 +330,7 @@ describe("Deleting blogs", () => {
   test("Valid existing ID, valid token of author: Deletes blog with status 204", async () => {
     const [executorAuthor] = await helper.getAllUsers();
     const [selectedBlogID] = executorAuthor.blogs;
-    const authorToken = createToken(executorAuthor);
+    const authorToken = helper.createToken(executorAuthor);
 
     await api
       .delete(`/api/blogs/${selectedBlogID.toString()}`)
@@ -367,7 +347,7 @@ describe("Deleting blogs", () => {
   test("Valid existing ID, malformatted token of author: Status 401", async () => {
     const [executorAuthor] = await helper.getAllUsers();
     const [selectedBlogID] = executorAuthor.blogs;
-    const authorToken = createToken(executorAuthor);
+    const authorToken = helper.createToken(executorAuthor);
 
     await api
       .delete(`/api/blogs/${selectedBlogID.toString()}`)
@@ -384,7 +364,7 @@ describe("Deleting blogs", () => {
   test("Valid existing ID, expired token of author: Status 401", async () => {
     const [executorAuthor] = await helper.getAllUsers();
     const [selectedBlogID] = executorAuthor.blogs;
-    const expiredAuthorToken = getRandomExpiredToken(executorAuthor);
+    const expiredAuthorToken = helper.getRandomExpiredToken(executorAuthor);
 
     await api
       .delete(`/api/blogs/${selectedBlogID.toString()}`)
@@ -417,7 +397,7 @@ describe("Deleting blogs", () => {
   test("Valid existing ID, someone else's token: Status 401", async () => {
     const [executorAuthor, differentAuthor] = await helper.getAllUsers();
     const [selectedBlogID] = executorAuthor.blogs;
-    const differentAuthorToken = createToken(differentAuthor);
+    const differentAuthorToken = helper.createToken(differentAuthor);
 
     await api
       .delete(`/api/blogs/${selectedBlogID.toString()}`)
@@ -434,7 +414,7 @@ describe("Deleting blogs", () => {
   test("Valid non-existing ID, valid token of author: Status 400", async () => {
     const [initialBlog] = await helper.generateValidNonExistingID();
     const [executorAuthor] = await helper.getAllUsers();
-    const authorToken = createToken(executorAuthor);
+    const authorToken = helper.createToken(executorAuthor);
 
     await api
       .delete(`/api/blogs/${initialBlog.id}`)
@@ -444,7 +424,7 @@ describe("Deleting blogs", () => {
 
   test("Malformed ID, valid token of author: Status 400", async () => {
     const [executorAuthor] = await helper.getAllUsers();
-    const authorToken = createToken(executorAuthor);
+    const authorToken = helper.createToken(executorAuthor);
 
     await api
       .delete(`/api/blogs/${helper.malformedID}`)
@@ -454,7 +434,7 @@ describe("Deleting blogs", () => {
 
   test("No ID, valid token of author: Status 404", async () => {
     const [executorAuthor] = await helper.getAllUsers();
-    const authorToken = createToken(executorAuthor);
+    const authorToken = helper.createToken(executorAuthor);
 
     await api
       .delete("/api/blogs")
